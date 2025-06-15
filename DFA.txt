@@ -1,0 +1,12 @@
+# DFA generated from NFA conversion
+
+States: 0 1 2
+Alphabet: a b
+Start state: 0
+Accept states: 0 1 2
+
+Transitions:
+0 a 1
+1 a 2
+1 b 2
+2 a 2
