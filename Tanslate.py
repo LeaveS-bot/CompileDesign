@@ -6,8 +6,8 @@ from collections import deque
 class NFAtoDFAConverter:
     def __init__(self, root):
         self.root = root
-        self.root.title("NFA to DFA Converter")
-        self.root.geometry("800x600")
+        self.root.title("NFA to DFA Converter & Minimizer")
+        self.root.geometry("900x700")  # 增加高度以容纳新控件
         self.root.resizable(True, True)
         
         # 设置中文字体支持
@@ -27,6 +27,8 @@ class NFAtoDFAConverter:
         self.create_widgets()
         self.input_file = ""
         self.output_file = ""
+        self.min_input_file = ""
+        self.min_output_file = ""
     
     def create_widgets(self):
         # 创建主框架
@@ -34,15 +36,15 @@ class NFAtoDFAConverter:
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
         # 标题
-        header = ttk.Label(main_frame, text="NFA to DFA Converter", style="Header.TLabel")
+        header = ttk.Label(main_frame, text="NFA to DFA Converter & Minimizer", style="Header.TLabel")
         header.pack(pady=(0, 20))
         
-        # 文件选择区域
-        file_frame = ttk.LabelFrame(main_frame, text="File Selection")
-        file_frame.pack(fill=tk.X, padx=10, pady=10)
+        # 文件选择区域 - NFA转DFA
+        nfa_frame = ttk.LabelFrame(main_frame, text="NFA to DFA Conversion")
+        nfa_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # 输入文件选择
-        input_frame = ttk.Frame(file_frame)
+        input_frame = ttk.Frame(nfa_frame)
         input_frame.pack(fill=tk.X, padx=10, pady=10)
         
         ttk.Label(input_frame, text="Input File (NFA):").pack(side=tk.LEFT, padx=(0, 10))
@@ -51,7 +53,7 @@ class NFAtoDFAConverter:
         ttk.Button(input_frame, text="Browse...", command=self.browse_input_file).pack(side=tk.LEFT)
         
         # 输出文件选择
-        output_frame = ttk.Frame(file_frame)
+        output_frame = ttk.Frame(nfa_frame)
         output_frame.pack(fill=tk.X, padx=10, pady=10)
         
         ttk.Label(output_frame, text="Output File (DFA):").pack(side=tk.LEFT, padx=(0, 10))
@@ -59,11 +61,34 @@ class NFAtoDFAConverter:
         self.output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
         ttk.Button(output_frame, text="Browse...", command=self.browse_output_file).pack(side=tk.LEFT)
         
-        # 转换按钮
+        # 文件选择区域 - DFA最小化
+        min_frame = ttk.LabelFrame(main_frame, text="DFA Minimization")
+        min_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # 最小化输入文件选择
+        min_input_frame = ttk.Frame(min_frame)
+        min_input_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(min_input_frame, text="Input File (DFA):").pack(side=tk.LEFT, padx=(0, 10))
+        self.min_input_entry = ttk.Entry(min_input_frame, width=50)
+        self.min_input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(min_input_frame, text="Browse...", command=self.browse_min_input_file).pack(side=tk.LEFT)
+        
+        # 最小化输出文件选择
+        min_output_frame = ttk.Frame(min_frame)
+        min_output_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(min_output_frame, text="Output File (Minimized DFA):").pack(side=tk.LEFT, padx=(0, 10))
+        self.min_output_entry = ttk.Entry(min_output_frame, width=50)
+        self.min_output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        ttk.Button(min_output_frame, text="Browse...", command=self.browse_min_output_file).pack(side=tk.LEFT)
+        
+        # 按钮区域
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, padx=10, pady=20)
         
-        ttk.Button(button_frame, text="Convert NFA to DFA", command=self.convert, style="TButton").pack(pady=10)
+        ttk.Button(button_frame, text="Convert NFA to DFA", command=self.convert, style="TButton").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Minimize DFA", command=self.minimize_dfa, style="TButton").pack(side=tk.LEFT, padx=5)
         
         # 状态显示区域
         status_frame = ttk.LabelFrame(main_frame, text="Conversion Status")
@@ -119,6 +144,29 @@ class NFAtoDFAConverter:
             self.output_entry.delete(0, tk.END)
             self.output_entry.insert(0, file_path)
             self.log(f"Selected output file: {file_path}")
+    
+    def browse_min_input_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Select DFA Input File",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if file_path:
+            self.min_input_file = file_path
+            self.min_input_entry.delete(0, tk.END)
+            self.min_input_entry.insert(0, file_path)
+            self.log(f"Selected minimization input file: {file_path}")
+    
+    def browse_min_output_file(self):
+        file_path = filedialog.asksaveasfilename(
+            title="Save Minimized DFA Output File",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            defaultextension=".txt"
+        )
+        if file_path:
+            self.min_output_file = file_path
+            self.min_output_entry.delete(0, tk.END)
+            self.min_output_entry.insert(0, file_path)
+            self.log(f"Selected minimization output file: {file_path}")
     
     def log(self, message):
         self.log_text.config(state=tk.NORMAL)
@@ -244,24 +292,104 @@ class NFAtoDFAConverter:
         
         return nfa_info
     
-    def write_dfa_file(self, dfa_info, file_path):
+    def read_dfa_file(self, file_path):
+        """Read DFA definition from text file in transition matrix format"""
+        dfa_info = {
+            'states': [],
+            'alphabet': [],
+            'start': '',
+            'accept': [],
+            'transitions': {}
+        }
+        
+        try:
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+            
+            # 移除注释和空行
+            lines = [line.strip() for line in lines if line.strip() and not line.startswith('#')]
+            
+            if not lines:
+                raise ValueError("Empty file")
+            
+            # 解析状态行
+            if not lines[0].startswith("States:"):
+                raise ValueError("First line should be States: ...")
+            dfa_info['states'] = lines[0].split(':', 1)[1].strip().split()
+            
+            # 解析字母表行
+            if not lines[1].startswith("Alphabet:"):
+                raise ValueError("Second line should be Alphabet: ...")
+            dfa_info['alphabet'] = lines[1].split(':', 1)[1].strip().split()
+            
+            # 解析开始状态行
+            if not lines[2].startswith("Start state:"):
+                raise ValueError("Third line should be Start state: ...")
+            dfa_info['start'] = lines[2].split(':', 1)[1].strip()
+            
+            # 解析接受状态行
+            if not lines[3].startswith("Accept states:"):
+                raise ValueError("Fourth line should be Accept states: ...")
+            dfa_info['accept'] = lines[3].split(':', 1)[1].strip().split()
+            
+            # 解析转移矩阵
+            if not lines[4].startswith("Transitions:"):
+                raise ValueError("Fifth line should be Transitions: ...")
+            
+            # 矩阵头部 - 符号列表
+            header = lines[5].split()
+            if header[0] != "State":
+                raise ValueError("Transition matrix header should start with 'State'")
+            
+            # 符号列表（不包括"State"）
+            symbols = header[1:]
+            
+            # 矩阵数据
+            for i in range(6, len(lines)):
+                parts = lines[i].split()
+                if len(parts) != len(header):
+                    raise ValueError(f"Invalid transition matrix row: {lines[i]}")
+                
+                state = parts[0]
+                
+                for j, symbol in enumerate(symbols):
+                    target = parts[j+1]
+                    if target != '-':
+                        dfa_info['transitions'][(state, symbol)] = target
+            
+            # 验证DFA信息
+            if not dfa_info['states']:
+                raise ValueError("No states defined in DFA file")
+            if not dfa_info['alphabet']:
+                raise ValueError("No alphabet defined in DFA file")
+            if not dfa_info['start']:
+                raise ValueError("No start state defined in DFA file")
+            if not dfa_info['accept']:
+                self.log("Warning: No accept states defined in DFA file")
+        
+        except Exception as e:
+            raise ValueError(f"Error parsing DFA file: {str(e)}") from e
+        
+        return dfa_info
+    
+    def write_dfa_file(self, dfa_info, file_path, minimized=False):
         """Write DFA definition to text file in transition matrix format"""
         try:
             with open(file_path, 'w') as f:
-                f.write("# DFA generated from NFA conversion\n\n")
+                prefix = "# Minimized DFA\n\n" if minimized else "# DFA generated from NFA conversion\n\n"
+                f.write(prefix)
                 
                 # States
-                f.write(f"States: {' '.join([f'S{i}' for i in dfa_info['states']])}\n")
+                f.write(f"States: {' '.join(dfa_info['states'])}\n")
                 
-                # Alphabet (excluding epsilon)
+                # Alphabet
                 f.write(f"Alphabet: {' '.join(dfa_info['alphabet'])}\n")
                 
                 # Start state
-                f.write(f"Start state: S{dfa_info['start']}\n")
+                f.write(f"Start state: {dfa_info['start']}\n")
                 
                 # Accept states
-                accept_states = [f'S{i}' for i in dfa_info['accept']]
-                f.write(f"Accept states: {' '.join(accept_states)}\n\n")
+                f.write(f"Accept states: {' '.join(dfa_info['accept'])}\n\n")
                 
                 # Transition matrix
                 f.write("Transitions:\n")
@@ -271,14 +399,14 @@ class NFAtoDFAConverter:
                 f.write(f"{' '.join(header)}\n")
                 
                 # Matrix rows
-                for state_index in dfa_info['states']:
-                    row = [f"S{state_index}"]
+                for state in dfa_info['states']:
+                    row = [state]
                     
                     for symbol in dfa_info['alphabet']:
-                        key = (state_index, symbol)
+                        key = (state, symbol)
                         if key in dfa_info['transitions']:
                             target = dfa_info['transitions'][key]
-                            row.append(f"S{target}")
+                            row.append(target)
                         else:
                             row.append("-")
                     
@@ -374,14 +502,266 @@ class NFAtoDFAConverter:
                     row.append("--")
             state_report.append(" | ".join(row))
         
+        # 为写入文件准备DFA信息
+        dfa_states_str = [f"S{i}" for i in range(len(dfa_states))]
+        dfa_accept_str = [f"S{i}" for i in sorted(accept_states)]
+        transitions_for_file = {}
+        for (state_idx, symbol), target_idx in dfa_transitions.items():
+            transitions_for_file[(f"S{state_idx}", symbol)] = f"S{target_idx}"
+        
         return {
-            'states': list(range(len(dfa_states))),
+            'states': dfa_states_str,
             'alphabet': alphabet,
-            'start': 0,
-            'accept': sorted(accept_states),
-            'transitions': dfa_transitions,
+            'start': "S0",
+            'accept': dfa_accept_str,
+            'transitions': transitions_for_file,
             'process_log': process_log,
             'state_report': state_report
+        }
+    
+    def minimize_dfa(self):
+        """Minimize the DFA using Hopcroft's algorithm"""
+        if not self.min_input_file or not os.path.exists(self.min_input_file):
+            messagebox.showerror("Error", "Please select a valid DFA input file")
+            return
+        
+        if not self.min_output_file:
+            messagebox.showerror("Error", "Please select a minimized DFA output file")
+            return
+        
+        try:
+            # 重置日志和状态
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.config(state=tk.DISABLED)
+            self.update_status("")
+            
+            # 读取DFA定义
+            self.log(f"Reading DFA file: {self.min_input_file}")
+            dfa_info = self.read_dfa_file(self.min_input_file)
+            
+            self.log(f"DFA states: {' '.join(dfa_info['states'])}")
+            self.log(f"Alphabet: {' '.join(dfa_info['alphabet'])}")
+            self.log(f"Start state: {dfa_info['start']}")
+            self.log(f"Accept states: {' '.join(dfa_info['accept'])}")
+            
+            # 显示DFA转移矩阵
+            self.log("\nDFA Transition Matrix:")
+            # 表头
+            header = ["State"] + dfa_info['alphabet']
+            self.log(" | ".join(header))
+            self.log("-" * (len(header) * 8))
+            
+            # 矩阵内容
+            for state in dfa_info['states']:
+                row = [state]
+                for symbol in dfa_info['alphabet']:
+                    key = (state, symbol)
+                    if key in dfa_info['transitions']:
+                        row.append(dfa_info['transitions'][key])
+                    else:
+                        row.append('-')
+                self.log(" | ".join(row))
+            
+            # 执行最小化
+            self.log("\nStarting DFA minimization...")
+            minimized_dfa = self.hopcroft_minimization(dfa_info)
+            self.log("Minimization completed successfully!")
+            
+            # 显示最小化后的DFA
+            self.log("\nMinimized DFA:")
+            self.log(f"States: {' '.join(minimized_dfa['states'])}")
+            self.log(f"Start state: {minimized_dfa['start']}")
+            self.log(f"Accept states: {' '.join(minimized_dfa['accept'])}")
+            
+            # 显示转移矩阵
+            self.log("\nMinimized Transition Matrix:")
+            header = ["State"] + minimized_dfa['alphabet']
+            self.log(" | ".join(header))
+            self.log("-" * (len(header) * 8))
+            
+            for state in minimized_dfa['states']:
+                row = [state]
+                for symbol in minimized_dfa['alphabet']:
+                    key = (state, symbol)
+                    if key in minimized_dfa['transitions']:
+                        row.append(minimized_dfa['transitions'][key])
+                    else:
+                        row.append('-')
+                self.log(" | ".join(row))
+            
+            # 更新状态显示
+            status_report = [
+                f"Original DFA States: {len(dfa_info['states'])}",
+                f"Minimized DFA States: {len(minimized_dfa['states'])}",
+                f"Reduction: {len(dfa_info['states']) - len(minimized_dfa['states'])} states removed",
+                "\nMinimized DFA:",
+                f"States: {' '.join(minimized_dfa['states'])}",
+                f"Alphabet: {' '.join(minimized_dfa['alphabet'])}",
+                f"Start state: {minimized_dfa['start']}",
+                f"Accept states: {' '.join(minimized_dfa['accept'])}",
+                "\nTransition Matrix:"
+            ]
+            
+            # 添加表头
+            header = ["State"] + minimized_dfa['alphabet']
+            status_report.append(" | ".join(header))
+            status_report.append("-" * (len(header) * 8))
+            
+            # 添加每个状态的转移
+            for state in minimized_dfa['states']:
+                row = [state]
+                for symbol in minimized_dfa['alphabet']:
+                    key = (state, symbol)
+                    if key in minimized_dfa['transitions']:
+                        row.append(minimized_dfa['transitions'][key])
+                    else:
+                        row.append("--")
+                status_report.append(" | ".join(row))
+            
+            self.update_status("\n".join(status_report))
+            
+            # 写入输出文件
+            self.write_dfa_file(minimized_dfa, self.min_output_file, minimized=True)
+            
+            self.log(f"\nMinimized DFA saved to: {self.min_output_file}")
+            messagebox.showinfo("Success", "DFA minimization completed and saved!")
+        
+        except Exception as e:
+            import traceback
+            error_msg = f"Error: {str(e)}"
+            self.log(error_msg)
+            self.log(traceback.format_exc())
+            messagebox.showerror("Minimization Error", f"An error occurred during minimization:\n{error_msg}")
+    
+    def hopcroft_minimization(self, dfa):
+        """Hopcroft's algorithm for DFA minimization"""
+        # 步骤1：初始化分区（接受状态和非接受状态）
+        accepting = set(dfa['accept'])
+        non_accepting = set(dfa['states']) - accepting
+        
+        # 如果非接受状态为空，则只有接受状态
+        partitions = []
+        if non_accepting:
+            partitions.append(non_accepting)
+        if accepting:
+            partitions.append(accepting)
+        
+        # 如果只有一个分区（所有状态都是接受状态或都不是），则无法进一步划分
+        if len(partitions) == 1:
+            # 所有状态等价
+            return self.build_minimized_dfa(dfa, partitions)
+        
+        # 工作列表初始化
+        worklist = deque()
+        if len(accepting) <= len(non_accepting):
+            worklist.append(accepting)
+        else:
+            worklist.append(non_accepting)
+        
+        # 分区映射：每个状态所属的分区
+        partition_map = {}
+        for state in dfa['states']:
+            if state in accepting:
+                partition_map[state] = accepting
+            else:
+                partition_map[state] = non_accepting
+        
+        # 步骤2：迭代划分
+        while worklist:
+            a = worklist.popleft()
+            
+            for symbol in dfa['alphabet']:
+                # 查找所有进入A的转移
+                x = set()
+                for state in dfa['states']:
+                    key = (state, symbol)
+                    if key in dfa['transitions']:
+                        target = dfa['transitions'][key]
+                        if target in a:
+                            x.add(state)
+                
+                # 对于每个分区Y，检查是否与X有交集
+                new_partitions = []
+                for y in partitions:
+                    intersect = y & x
+                    difference = y - x
+                    
+                    if intersect and difference:
+                        # 将Y划分为两个新分区
+                        new_partitions.append(intersect)
+                        new_partitions.append(difference)
+                        
+                        # 更新工作列表
+                        if y in worklist:
+                            worklist.remove(y)
+                            worklist.append(intersect)
+                            worklist.append(difference)
+                        else:
+                            if len(intersect) <= len(difference):
+                                worklist.append(intersect)
+                            else:
+                                worklist.append(difference)
+                        
+                        # 更新分区映射
+                        for state in intersect:
+                            partition_map[state] = intersect
+                        for state in difference:
+                            partition_map[state] = difference
+                    else:
+                        new_partitions.append(y)
+                
+                partitions = new_partitions
+        
+        # 步骤3：构建最小化DFA
+        return self.build_minimized_dfa(dfa, partitions)
+    
+    def build_minimized_dfa(self, dfa, partitions):
+        """Build minimized DFA from partitions"""
+        # 创建新状态（等价类的代表）
+        new_states = []
+        partition_rep = {}  # 每个分区的代表状态
+        state_to_new = {}   # 原始状态到新状态的映射
+        
+        for i, part in enumerate(partitions):
+            # 选择分区中的第一个状态作为代表
+            rep = sorted(part)[0]
+            new_state = f"M{i}"
+            new_states.append(new_state)
+            partition_rep[new_state] = part
+            
+            # 映射原始状态到新状态
+            for state in part:
+                state_to_new[state] = new_state
+        
+        # 确定开始状态
+        start_rep = state_to_new[dfa['start']]
+        
+        # 确定接受状态
+        accept_set = set()
+        for state in dfa['accept']:
+            if state in state_to_new:
+                accept_set.add(state_to_new[state])
+        
+        # 构建转移函数
+        new_transitions = {}
+        for new_state in new_states:
+            # 获取原始代表状态
+            orig_rep = next(iter(partition_rep[new_state]))
+            
+            for symbol in dfa['alphabet']:
+                key = (orig_rep, symbol)
+                if key in dfa['transitions']:
+                    target = dfa['transitions'][key]
+                    new_target = state_to_new[target]
+                    new_transitions[(new_state, symbol)] = new_target
+        
+        return {
+            'states': new_states,
+            'alphabet': dfa['alphabet'],
+            'start': start_rep,
+            'accept': sorted(accept_set),
+            'transitions': new_transitions
         }
     
     def convert(self):

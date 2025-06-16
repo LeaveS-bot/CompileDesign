@@ -1,0 +1,13 @@
+# Minimized DFA
+
+States: M0 M1 M2 M3
+Alphabet: a b
+Start state: M0
+Accept states: M3
+
+Transitions:
+State a b
+M0 M2 M1
+M1 M2 M3
+M2 M3 M1
+M3 M3 M3
