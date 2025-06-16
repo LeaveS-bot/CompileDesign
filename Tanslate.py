@@ -148,16 +148,10 @@ class NFAtoDFAConverter:
                         if next_state not in closure:
                             closure.add(next_state)
                             stack.append(next_state)
-                # 处理空字符串转移（与ε相同）
-                if '' in nfa_transitions[state]:
-                    for next_state in nfa_transitions[state]['']:
-                        if next_state not in closure:
-                            closure.add(next_state)
-                            stack.append(next_state)
         return closure
     
-    def Ia(self, states, symbol, nfa_transitions):
-        """Compute transition set for given states and symbol"""
+    def move(self, states, symbol, nfa_transitions):
+        """Compute move set for given states and symbol"""
         result = set()
         for state in states:
             # 检查当前状态是否有该符号的转移
@@ -171,120 +165,133 @@ class NFAtoDFAConverter:
         nfa_info = {
             'states': [],
             'alphabet': [],
-            'start': [],
+            'start': '',
             'accept': [],
             'transitions': {}
         }
         
-        with open(file_path, 'r') as f:
-            lines = f.readlines()
-        
-        # 移除注释和空行
-        lines = [line.strip() for line in lines if line.strip() and not line.startswith('#')]
-        
-        # 解析每个部分
-        section = None
-        for line in lines:
-            line_lower = line.lower()
-            if line_lower.startswith('states:'):
-                section = 'states'
-                nfa_info['states'] = line.split(':')[1].strip().split()
-            elif line_lower.startswith('alphabet:'):
-                section = 'alphabet'
-                nfa_info['alphabet'] = line.split(':')[1].strip().split()
-            elif line_lower.startswith('start state:'):
-                section = 'start'
-                nfa_info['start'] = line.split(':')[1].strip().split()
-            elif line_lower.startswith('accept states:'):
-                section = 'accept'
-                nfa_info['accept'] = line.split(':')[1].strip().split()
-            elif line_lower.startswith('transitions:'):
-                section = 'transitions'
-            elif section == 'transitions' and line:
-                # 支持多种分隔符：空格、逗号、冒号
-                if ' ' in line:
+        try:
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+            
+            # 移除注释和空行
+            lines = [line.strip() for line in lines if line.strip() and not line.startswith('#')]
+            
+            # 解析每个部分
+            section = None
+            for line in lines:
+                line_lower = line.lower()
+                if line_lower.startswith('states:'):
+                    section = 'states'
+                    nfa_info['states'] = line.split(':', 1)[1].strip().split()
+                elif line_lower.startswith('alphabet:'):
+                    section = 'alphabet'
+                    nfa_info['alphabet'] = line.split(':', 1)[1].strip().split()
+                elif line_lower.startswith('start state:'):
+                    section = 'start'
+                    nfa_info['start'] = line.split(':', 1)[1].strip()
+                elif line_lower.startswith('accept states:'):
+                    section = 'accept'
+                    nfa_info['accept'] = line.split(':', 1)[1].strip().split()
+                elif line_lower.startswith('transitions:'):
+                    section = 'transitions'
+                elif section == 'transitions' and line:
+                    # 使用空格分割转移行
                     parts = line.split()
-                elif ',' in line:
-                    parts = line.split(',')
-                elif ':' in line:
-                    parts = line.split(':')
-                else:
-                    continue
-                
-                # 确保有足够的部分
-                if len(parts) < 3:
-                    continue
-                
-                from_state = parts[0].strip()
-                symbol = parts[1].strip()
-                to_states = [s.strip() for s in parts[2:]]
-                
-                # 处理空字符串转移
-                if symbol == "epsilon" or symbol == "ε" or symbol == "''":
-                    symbol = 'ε'
-                
-                # 初始化转移字典
-                if from_state not in nfa_info['transitions']:
-                    nfa_info['transitions'][from_state] = {}
-                if symbol not in nfa_info['transitions'][from_state]:
-                    nfa_info['transitions'][from_state][symbol] = []
-                
-                nfa_info['transitions'][from_state][symbol].extend(to_states)
+                    if len(parts) < 3:
+                        continue
+                    
+                    from_state = parts[0].strip()
+                    symbol = parts[1].strip()
+                    to_states = [s.strip() for s in parts[2:]]
+                    
+                    # 处理ε转移
+                    if symbol.lower() in ['epsilon', 'ε', 'eps']:
+                        symbol = 'ε'
+                    
+                    # 初始化转移字典
+                    if from_state not in nfa_info['transitions']:
+                        nfa_info['transitions'][from_state] = {}
+                    if symbol not in nfa_info['transitions'][from_state]:
+                        nfa_info['transitions'][from_state][symbol] = []
+                    
+                    nfa_info['transitions'][from_state][symbol].extend(to_states)
+            
+            # 验证NFA信息
+            if not nfa_info['states']:
+                raise ValueError("No states defined in NFA file")
+            if not nfa_info['alphabet']:
+                raise ValueError("No alphabet defined in NFA file")
+            if not nfa_info['start']:
+                raise ValueError("No start state defined in NFA file")
+            if not nfa_info['accept']:
+                self.log("Warning: No accept states defined in NFA file")
+        
+        except Exception as e:
+            raise ValueError(f"Error parsing NFA file: {str(e)}") from e
         
         return nfa_info
     
     def write_dfa_file(self, dfa_info, file_path):
         """Write DFA definition to text file"""
-        with open(file_path, 'w') as f:
-            f.write("# DFA generated from NFA conversion\n\n")
-            
-            # States
-            f.write(f"States: {' '.join(str(s) for s in dfa_info['states'])}\n")
-            
-            # Alphabet
-            f.write(f"Alphabet: {' '.join(dfa_info['alphabet'])}\n")
-            
-            # Start state
-            f.write(f"Start state: {dfa_info['start']}\n")
-            
-            # Accept states
-            if dfa_info['accept']:
-                f.write(f"Accept states: {' '.join(str(s) for s in dfa_info['accept'])}\n")
-            else:
-                f.write("Accept states: \n")
-            
-            # Transitions
-            f.write("\nTransitions:\n")
-            for (from_state, symbol), to_state in dfa_info['transitions'].items():
-                f.write(f"{from_state} {symbol} {to_state}\n")
+        try:
+            with open(file_path, 'w') as f:
+                f.write("# DFA generated from NFA conversion\n\n")
+                
+                # States
+                f.write(f"States: {' '.join(f'S{s}' for s in dfa_info['states'])}\n")
+                
+                # Alphabet
+                f.write(f"Alphabet: {' '.join(dfa_info['alphabet'])}\n")
+                
+                # Start state
+                f.write(f"Start state: S{dfa_info['start']}\n")
+                
+                # Accept states
+                if dfa_info['accept']:
+                    f.write(f"Accept states: {' '.join(f'S{s}' for s in dfa_info['accept'])}\n")
+                else:
+                    f.write("Accept states: \n")
+                
+                # Transitions
+                f.write("\nTransitions:\n")
+                for (from_state, symbol), to_state in dfa_info['transitions'].items():
+                    f.write(f"S{from_state} {symbol} S{to_state}\n")
+        except Exception as e:
+            raise IOError(f"Error writing DFA file: {str(e)}") from e
     
     def nfa_to_dfa(self, nfa_info):
         """Convert NFA to DFA using subset construction"""
         # 过滤出字母表（排除ε）
-        alphabet = [char for char in nfa_info['alphabet'] if char != 'ε' and char != '']
+        alphabet = [char for char in nfa_info['alphabet'] if char != 'ε']
         nfa_transitions = nfa_info['transitions']
         
         # 计算初始状态的ε闭包
-        start_closure = self.epsilon_closure(nfa_info['start'], nfa_transitions)
+        start_closure = self.epsilon_closure([nfa_info['start']], nfa_transitions)
         
         # 初始化DFA
-        dfa_states = [frozenset(start_closure)]  # DFA状态集合
-        dfa_transitions = {}                    # DFA转移函数
-        state_queue = deque([frozenset(start_closure)])
-        state_index_map = {frozenset(start_closure): 0}  # 状态集合到索引的映射
+        dfa_states = []                     # DFA状态集合
+        dfa_transitions = {}                 # DFA转移函数
+        state_queue = deque()                # 待处理状态队列
+        state_index_map = {}                 # 状态集合到索引的映射
+        
+        # 添加初始状态
+        dfa_states.append(frozenset(start_closure))
+        state_index_map[frozenset(start_closure)] = 0
+        state_queue.append(frozenset(start_closure))
         next_index = 1
         
         # 记录转换过程
         process_log = []
-        process_log.append(f"Initial state: ε-CLOSURE({nfa_info['start']}) = {set(start_closure)}")
+        process_log.append(f"Initial state: ε-CLOSURE({nfa_info['start']}) = {set(start_closure)} -> S0")
         
         while state_queue:
             current_states = state_queue.popleft()
             current_idx = state_index_map[current_states]
             
             for char in alphabet:
-                # 计算直接转移
-                move_set = self.Ia(current_states, char, nfa_transitions)
+                # 计算移动集合
+                move_set = self.move(current_states, char, nfa_transitions)
                 
                 # 计算ε闭包
                 if move_set:
@@ -292,33 +299,32 @@ class NFAtoDFAConverter:
                 else:
                     new_state_set = frozenset()
                 
-                if not new_state_set:  # 跳过空集
-                    continue
-                
-                # 如果是新状态，添加到DFA
-                if new_state_set not in state_index_map:
-                    state_index_map[new_state_set] = next_index
-                    dfa_states.append(new_state_set)
-                    state_queue.append(new_state_set)
-                    process_log.append(f"New state discovered: S{next_index} = {set(new_state_set)}")
-                    next_index += 1
-                
-                # 记录转移
-                from_idx = state_index_map[current_states]
-                to_idx = state_index_map[new_state_set]
-                dfa_transitions[(from_idx, char)] = to_idx
-                
-                process_log.append(f"State S{from_idx} on input '{char}' -> S{to_idx}")
+                # 如果新状态不为空
+                if new_state_set:
+                    # 如果是新状态，添加到DFA
+                    if new_state_set not in state_index_map:
+                        state_index_map[new_state_set] = next_index
+                        dfa_states.append(new_state_set)
+                        state_queue.append(new_state_set)
+                        process_log.append(f"New state discovered: S{next_index} = {set(new_state_set)}")
+                        next_index += 1
+                    
+                    # 记录转移
+                    to_idx = state_index_map[new_state_set]
+                    dfa_transitions[(current_idx, char)] = to_idx
+                    process_log.append(f"State S{current_idx} on input '{char}' -> S{to_idx}")
+                else:
+                    process_log.append(f"State S{current_idx} on input '{char}' -> (dead state)")
         
         # 确定接受状态（包含NFA任意接受状态的状态）
         accept_states = set()
         for idx, state_set in enumerate(dfa_states):
-            if state_set & set(nfa_info['accept']):
+            if any(state in nfa_info['accept'] for state in state_set):
                 accept_states.add(idx)
         
         # 生成状态报告
         state_report = []
-        state_report.append(f"DFA States: {len(dfa_states)}")
+        state_report.append(f"Number of DFA States: {len(dfa_states)}")
         state_report.append(f"Start state: S0")
         if accept_states:
             state_report.append(f"Accept states: {', '.join(f'S{i}' for i in sorted(accept_states))}")
@@ -332,7 +338,7 @@ class NFAtoDFAConverter:
         state_report.append("-" * (len(header) * 8))
         
         # 添加每个状态的转移
-        for idx, state_set in enumerate(dfa_states):
+        for idx in range(len(dfa_states)):
             row = [f"S{idx}"]
             for char in alphabet:
                 key = (idx, char)
@@ -362,13 +368,19 @@ class NFAtoDFAConverter:
             return
         
         try:
+            # 重置日志和状态
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.config(state=tk.DISABLED)
+            self.update_status("")
+            
             # 读取NFA定义
             self.log(f"Reading NFA file: {self.input_file}")
             nfa_info = self.read_nfa_file(self.input_file)
             
             self.log(f"NFA states: {' '.join(nfa_info['states'])}")
             self.log(f"Alphabet: {' '.join(nfa_info['alphabet'])}")
-            self.log(f"Start state: {' '.join(nfa_info['start'])}")
+            self.log(f"Start state: {nfa_info['start']}")
             self.log(f"Accept states: {' '.join(nfa_info['accept'])}")
             
             # 显示NFA转移
@@ -398,9 +410,10 @@ class NFAtoDFAConverter:
         
         except Exception as e:
             import traceback
-            self.log(f"Error: {str(e)}")
+            error_msg = f"Error: {str(e)}"
+            self.log(error_msg)
             self.log(traceback.format_exc())
-            messagebox.showerror("Conversion Error", f"An error occurred during conversion:\n{str(e)}")
+            messagebox.showerror("Conversion Error", f"An error occurred during conversion:\n{error_msg}")
 
 if __name__ == "__main__":
     root = tk.Tk()

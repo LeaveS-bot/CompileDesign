@@ -1,12 +1,22 @@
 # DFA generated from NFA conversion
 
-States: 0 1 2
+States: S0 S1 S2 S3 S4 S5 S6
 Alphabet: a b
-Start state: 0
-Accept states: 0 1 2
+Start state: S0
+Accept states: S3 S4 S5 S6
 
 Transitions:
-0 a 1
-1 a 2
-1 b 2
-2 a 2
+S0 a S1
+S0 b S2
+S1 a S3
+S1 b S2
+S2 a S1
+S2 b S4
+S3 a S3
+S3 b S5
+S4 a S6
+S4 b S4
+S5 a S6
+S5 b S4
+S6 a S3
+S6 b S5

@@ -1,10 +1,17 @@
-States: 0 1 2
+States: X 1 2 3 4 5 6 Y
 Alphabet: a b ε
-Start state: 0
-Accept states: 2
-
+Start state: X
+Accept states: Y
 Transitions:
-0 a 1
-0 ε 2
-1 b 2
-2 a 2
+X ε 5
+5 a 5
+5 b 5
+5 ε 1
+1 a 3
+1 b 4
+3 a 2
+4 b 2
+2 ε 6
+6 a 6
+6 b 6
+6 ε Y
