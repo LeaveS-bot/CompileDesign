@@ -161,7 +161,7 @@ class NFAtoDFAConverter:
         return result
     
     def read_nfa_file(self, file_path):
-        """Read NFA definition from text file"""
+        """Read NFA definition from text file in transition matrix format"""
         nfa_info = {
             'states': [],
             'alphabet': [],
@@ -177,45 +177,57 @@ class NFAtoDFAConverter:
             # 移除注释和空行
             lines = [line.strip() for line in lines if line.strip() and not line.startswith('#')]
             
-            # 解析每个部分
-            section = None
-            for line in lines:
-                line_lower = line.lower()
-                if line_lower.startswith('states:'):
-                    section = 'states'
-                    nfa_info['states'] = line.split(':', 1)[1].strip().split()
-                elif line_lower.startswith('alphabet:'):
-                    section = 'alphabet'
-                    nfa_info['alphabet'] = line.split(':', 1)[1].strip().split()
-                elif line_lower.startswith('start state:'):
-                    section = 'start'
-                    nfa_info['start'] = line.split(':', 1)[1].strip()
-                elif line_lower.startswith('accept states:'):
-                    section = 'accept'
-                    nfa_info['accept'] = line.split(':', 1)[1].strip().split()
-                elif line_lower.startswith('transitions:'):
-                    section = 'transitions'
-                elif section == 'transitions' and line:
-                    # 使用空格分割转移行
-                    parts = line.split()
-                    if len(parts) < 3:
-                        continue
-                    
-                    from_state = parts[0].strip()
-                    symbol = parts[1].strip()
-                    to_states = [s.strip() for s in parts[2:]]
-                    
-                    # 处理ε转移
-                    if symbol.lower() in ['epsilon', 'ε', 'eps']:
+            if not lines:
+                raise ValueError("Empty file")
+            
+            # 解析状态行
+            if not lines[0].startswith("States:"):
+                raise ValueError("First line should be States: ...")
+            nfa_info['states'] = lines[0].split(':', 1)[1].strip().split()
+            
+            # 解析字母表行
+            if not lines[1].startswith("Alphabet:"):
+                raise ValueError("Second line should be Alphabet: ...")
+            nfa_info['alphabet'] = lines[1].split(':', 1)[1].strip().split()
+            
+            # 解析开始状态行
+            if not lines[2].startswith("Start state:"):
+                raise ValueError("Third line should be Start state: ...")
+            nfa_info['start'] = lines[2].split(':', 1)[1].strip()
+            
+            # 解析接受状态行
+            if not lines[3].startswith("Accept states:"):
+                raise ValueError("Fourth line should be Accept states: ...")
+            nfa_info['accept'] = lines[3].split(':', 1)[1].strip().split()
+            
+            # 解析转移矩阵
+            if not lines[4].startswith("Transitions:"):
+                raise ValueError("Fifth line should be Transitions: ...")
+            
+            # 矩阵头部 - 符号列表
+            header = lines[5].split()
+            if header[0] != "State":
+                raise ValueError("Transition matrix header should start with 'State'")
+            
+            # 矩阵数据
+            for i in range(6, len(lines)):
+                parts = lines[i].split()
+                if len(parts) != len(header):
+                    raise ValueError(f"Invalid transition matrix row: {lines[i]}")
+                
+                state = parts[0]
+                nfa_info['transitions'][state] = {}
+                
+                for j in range(1, len(parts)):
+                    symbol = header[j]
+                    if symbol == 'ε':
                         symbol = 'ε'
                     
-                    # 初始化转移字典
-                    if from_state not in nfa_info['transitions']:
-                        nfa_info['transitions'][from_state] = {}
-                    if symbol not in nfa_info['transitions'][from_state]:
-                        nfa_info['transitions'][from_state][symbol] = []
+                    # 解析目标状态
+                    targets = parts[j].split(',') if parts[j] != '-' else []
                     
-                    nfa_info['transitions'][from_state][symbol].extend(to_states)
+                    if targets:
+                        nfa_info['transitions'][state][symbol] = targets
             
             # 验证NFA信息
             if not nfa_info['states']:
@@ -233,30 +245,44 @@ class NFAtoDFAConverter:
         return nfa_info
     
     def write_dfa_file(self, dfa_info, file_path):
-        """Write DFA definition to text file"""
+        """Write DFA definition to text file in transition matrix format"""
         try:
             with open(file_path, 'w') as f:
                 f.write("# DFA generated from NFA conversion\n\n")
                 
                 # States
-                f.write(f"States: {' '.join(f'S{s}' for s in dfa_info['states'])}\n")
+                f.write(f"States: {' '.join([f'S{i}' for i in dfa_info['states']])}\n")
                 
-                # Alphabet
+                # Alphabet (excluding epsilon)
                 f.write(f"Alphabet: {' '.join(dfa_info['alphabet'])}\n")
                 
                 # Start state
                 f.write(f"Start state: S{dfa_info['start']}\n")
                 
                 # Accept states
-                if dfa_info['accept']:
-                    f.write(f"Accept states: {' '.join(f'S{s}' for s in dfa_info['accept'])}\n")
-                else:
-                    f.write("Accept states: \n")
+                accept_states = [f'S{i}' for i in dfa_info['accept']]
+                f.write(f"Accept states: {' '.join(accept_states)}\n\n")
                 
-                # Transitions
-                f.write("\nTransitions:\n")
-                for (from_state, symbol), to_state in dfa_info['transitions'].items():
-                    f.write(f"S{from_state} {symbol} S{to_state}\n")
+                # Transition matrix
+                f.write("Transitions:\n")
+                
+                # Matrix header
+                header = ["State"] + dfa_info['alphabet']
+                f.write(f"{' '.join(header)}\n")
+                
+                # Matrix rows
+                for state_index in dfa_info['states']:
+                    row = [f"S{state_index}"]
+                    
+                    for symbol in dfa_info['alphabet']:
+                        key = (state_index, symbol)
+                        if key in dfa_info['transitions']:
+                            target = dfa_info['transitions'][key]
+                            row.append(f"S{target}")
+                        else:
+                            row.append("-")
+                    
+                    f.write(f"{' '.join(row)}\n")
         except Exception as e:
             raise IOError(f"Error writing DFA file: {str(e)}") from e
     
@@ -330,7 +356,7 @@ class NFAtoDFAConverter:
             state_report.append(f"Accept states: {', '.join(f'S{i}' for i in sorted(accept_states))}")
         else:
             state_report.append("Accept states: None")
-        state_report.append("\nTransition Table:")
+        state_report.append("\nTransition Matrix:")
         
         # 添加表头
         header = ["State"] + alphabet
@@ -383,11 +409,22 @@ class NFAtoDFAConverter:
             self.log(f"Start state: {nfa_info['start']}")
             self.log(f"Accept states: {' '.join(nfa_info['accept'])}")
             
-            # 显示NFA转移
-            self.log("\nNFA Transitions:")
-            for from_state, transitions in nfa_info['transitions'].items():
-                for symbol, to_states in transitions.items():
-                    self.log(f"  {from_state} --[{symbol}]--> {', '.join(to_states)}")
+            # 显示NFA转移矩阵
+            self.log("\nNFA Transition Matrix:")
+            # 表头
+            header = ["State"] + nfa_info['alphabet']
+            self.log(" | ".join(header))
+            self.log("-" * (len(header) * 8))
+            
+            # 矩阵内容
+            for state in nfa_info['states']:
+                row = [state]
+                for symbol in nfa_info['alphabet']:
+                    if state in nfa_info['transitions'] and symbol in nfa_info['transitions'][state]:
+                        row.append(','.join(nfa_info['transitions'][state][symbol]))
+                    else:
+                        row.append('-')
+                self.log(" | ".join(row))
             
             # 执行转换
             self.log("\nStarting NFA to DFA conversion...")
